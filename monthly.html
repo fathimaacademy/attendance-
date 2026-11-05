@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monthly Attendance Report</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .table-wrap { overflow-x: auto; }
+  #monthlyResults table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+  #monthlyResults th, #monthlyResults td { border: 1px solid #ccc; padding: 8px; text-align: left; white-space: nowrap; }
+  #monthlyResults th { background: #f0f0f0; }
+  .low { background: #fde6e6; }
+  .report-summary { margin-top: 12px; font-weight: bold; text-align: center; }
+  .print-btn { display: block; margin: 15px auto 0; }
+  @media print { .no-print { display: none; } }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <h1>FATHIMA EXCELLENCE ACADEMY</h1>
+  <h2>Monthly Attendance Report</h2>
+
+  <div class="date-row no-print">
+    <label>Select Month: </label>
+    <input type="month" id="monthInput">
+    <button type="button" onclick="loadMonthly()">View Monthly Report</button>
+  </div>
+
+  <p id="monthStatus" style="text-align:center; font-weight:bold;"></p>
+
+  <div class="table-wrap">
+    <div id="monthlyResults"></div>
+  </div>
+
+  <button type="button" class="print-btn no-print" onclick="window.print()">Print / Save as PDF</button>
+
+  <p class="no-print" style="text-align:center; margin-top:20px;">
+    <a href="index.html">&larr; Attendance Form</a> |
+    <a href="view.html">Daily Report</a>
+  </p>
+
+</div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwk8y-8lbglVpmDT76FOXIG00uFaOh4qweAjCrO3wxqcUukZDQJ7hUedsUTrt61OBE/exec";
+
+// default ah indha month select aagum
+(function () {
+  const now = new Date();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  document.getElementById('monthInput').value = now.getFullYear() + "-" + m;
+})();
+
+function standardNumber(s) {
+  return parseInt(String(s), 10) || 0;
+}
+
+async function loadMonthly() {
+  const monthVal = document.getElementById('monthInput').value;
+  const status = document.getElementById('monthStatus');
+  const results = document.getElementById('monthlyResults');
+
+  if (!monthVal) {
+    status.textContent = "Please select a month.";
+    status.style.color = "#b00020";
+    return;
+  }
+
+  status.textContent = "Loading... (konjam neram aagum)";
+  status.style.color = "#444";
+  results.innerHTML = "";
+
+  const parts = monthVal.split('-');
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const totalDays = new Date(year, month, 0).getDate();
+
+  let failedDays = 0;
+  const requests = [];
+
+  for (let d = 1; d <= totalDays; d++) {
+    const dateStr = monthVal + "-" + String(d).padStart(2, '0');
+    requests.push(
+      fetch(SCRIPT_URL + "?date=" + encodeURIComponent(dateStr))
+        .then(function (res) { return res.json(); })
+        .then(function (data) { return data.records || []; })
+        .catch(function () { failedDays++; return []; })
+    );
+  }
+
+  const daily = await Promise.all(requests);
+
+  const students = {};
+  let workingDays = 0;
+
+  daily.forEach(function (records) {
+    if (records.length === 0) return;
+    workingDays++;
+
+    // oru naal la oru student rendu thadavai submit pannirundha, kadaisi entry mattum edukkum
+    const dayMap = {};
+    records.forEach(function (r) {
+      dayMap[r.standard + "|" + r.name] = r;
+    });
+
+    Object.keys(dayMap).forEach(function (key) {
+      const r = dayMap[key];
+      if (!students[key]) {
+        students[key] = { standard: r.standard, name: r.name, present: 0, absent: 0 };
+      }
+      const st = String(r.status).toLowerCase();
+      if (st === "present") students[key].present++;
+      else if (st === "absent") students[key].absent++;
+    });
+  });
+
+  if (workingDays === 0) {
+    status.textContent = "No attendance found for " + monthVal + ".";
+    status.style.color = "#b00020";
+    return;
+  }
+
+  const list = Object.keys(students).map(function (k) { return students[k]; });
+  list.sort(function (a, b) {
+    return standardNumber(a.standard) - standardNumber(b.standard) || a.name.localeCompare(b.name);
+  });
+
+  let rows = "";
+  list.forEach(function (s, i) {
+    const total = s.present + s.absent;
+    const pct = total > 0 ? Math.round((s.present / total) * 100) : 0;
+    const cls = pct < 75 ? "low" : "";
+    rows += "<tr class='" + cls + "'><td>" + (i + 1) + "</td><td>" + s.standard + "</td><td>" + s.name +
+            "</td><td>" + s.present + "</td><td>" + s.absent + "</td><td>" + pct + "%</td></tr>";
+  });
+
+  results.innerHTML =
+    "<table>" +
+    "<tr><th>S.No</th><th>Std</th><th>Name</th><th>Present</th><th>Absent</th><th>%</th></tr>" +
+    rows +
+    "</table>" +
+    "<p class='report-summary'>Month: " + monthVal + " &nbsp;|&nbsp; Working Days: " + workingDays +
+    " &nbsp;|&nbsp; Students: " + list.length + "</p>" +
+    "<p style='text-align:center; font-size:13px;'>Red row = attendance 75% ku kammi</p>";
+
+  if (failedDays > 0) {
+    status.textContent = failedDays + " naal data load aagala. Marubadiyum try pannunga.";
+    status.style.color = "#b00020";
+  } else {
+    status.textContent = "";
+  }
+}
+</script>
+
+</body>
+</html>
