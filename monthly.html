@@ -144,7 +144,7 @@ async function loadMonthly() {
     "</table>" +
     "<p class='report-summary'>Month: " + monthVal + " &nbsp;|&nbsp; Working Days: " + workingDays +
     " &nbsp;|&nbsp; Students: " + list.length + "</p>" +
-    "<p style='text-align:center; font-size:13px;'>Red row = attendance 75% ku kammi</p>";
+    "<p style='text-align:center; font-size:13px;'>Below 75 percentage</p>";
 
   if (failedDays > 0) {
     status.textContent = failedDays + " naal data load aagala. Marubadiyum try pannunga.";
